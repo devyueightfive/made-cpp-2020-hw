@@ -13,6 +13,7 @@ count_det:
   // r5 = + a[2] * a[3] * a[7]
   // r6 = - a[2] * a[4] * a[6]
 
+  push {r4-r7}
 
   // load a[0], a[1], a[2] to r1, r
   ldr r1, [r0], #4  // read a[0]
@@ -56,5 +57,7 @@ count_det:
   sub r1, r1, r6
 
   mov r0, r1 //return
+
+  pop {r4-r7}
 
   bx lr
