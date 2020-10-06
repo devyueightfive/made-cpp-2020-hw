@@ -1,14 +1,22 @@
 #include <iostream>
 #include <functional>
 
-typedef std::function<int (int)> Op;
+typedef std::function<int(int)> Op;
 
-
-
-Op compose (size_t n, Op ops[]) {
+Op compose(size_t n, Op ops[]) {
     /// Your code goes here.
-}
+    if (n == 0) {
+        return [](int x) -> int { return x; };
+    }
 
+    if (n == 1) {
+        return [ops](int x) -> int { return ops[0](x); };
+    }
+
+    return [n, ops](int x) -> int {
+        return ops[0](compose(n - 1, ops + 1)(x));/// recursion: op0(op1(...op[n-1](x)))
+    };
+}
 
 int main () {
     /// Simple tests:
