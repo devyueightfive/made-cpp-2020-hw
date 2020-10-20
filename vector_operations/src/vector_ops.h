@@ -4,7 +4,7 @@
 
 namespace task {
 
-    const double EPS = 1e-7;
+    const double MY_EPS = 1e-7;
 
     // unary operations
 
@@ -102,7 +102,7 @@ namespace task {
     }
 
     // resize function
-    void resize(std::vector<double> &a) {
+    void resize(std::istream &in, std::vector<double> &a, int n) {
         a.clear();// clear input container
         double value;
         for (int i = 0; i < n; i++) {
@@ -117,7 +117,7 @@ namespace task {
     std::istream &operator>>(std::istream &in, std::vector<double> &a) {
         int n;
         in >> n;
-        resize(a);
+        resize(in, a, n);
         return in;
     }
 
@@ -168,21 +168,24 @@ namespace task {
 
     // Оператор ||, проверяющий коллинеарность
     bool operator||(const std::vector<double> &a, const std::vector<double> &b) {
-        k = coefficientOfProportionality();
+        double k = coefficientOfProportionality(a, b);
         if (k == 0) {
             return false;
         }
-        i = -1;
-        while (++i != N)
-            if (abs(a[i] - b[i] * k) > EPS) {
+        size_t i = -1;
+        double diff = 0;
+        while (++i != a.size()) {
+            diff = a[i] - b[i] * k;
+            if (abs(diff) > MY_EPS) {
                 return false;
             }
+        }
         return true;
     }
 
     // Оператор `&&`, проверяющий сонаправленность
     bool operator&&(const std::vector<double> &a, const std::vector<double> &b) {
-        return coefficientOfProportionality() > 0 && a || b;
+        return coefficientOfProportionality(a, b) > 0 && (a || b);
     }
 
     std::vector<int> operator|(const std::vector<int> &a,
