@@ -1,0 +1,6 @@
+cmake_minimum_required(VERSION 3.16)
+project(hw_5_allocator)
+set(CMAKE_CXX_STANDARD 14)
+set(HEADER library.h)
+set(SOURCES library.cpp)
+add_executable(main ${SOURCES})
