@@ -7,7 +7,7 @@
 
 using namespace task;
 
-Chunk::Chunk() : p(nullptr), size_of_data(0), copies(1), prev(nullptr) {
+Chunk::Chunk() : p(nullptr), size_of_data(0), prev(nullptr) {
 //    std::cout << "Chunk()" << std::endl;
 };
 
