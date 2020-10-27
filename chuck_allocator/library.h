@@ -11,7 +11,6 @@
 
 namespace task {
 
-
     class Chunk {
     private:
         uint8_t *p; // pointer to block with CHUNK_SIZE bytes
@@ -47,6 +46,7 @@ namespace task {
         using pointer = T *;
         using const_pointer = const T *;
         using reference = T &;
+        using difference_type = int; // signed
         using const_reference = const T &;
         using size_type = std::size_t;
         template<class U>
@@ -60,6 +60,8 @@ namespace task {
 
         // Copy constructor
         MyAllocator(const MyAllocator &other);
+
+        MyAllocator<T> &operator=(MyAllocator<T> const &other);
 
         T *allocate(size_t n);
 
@@ -78,8 +80,6 @@ namespace task {
     private:
         Chunk *chunks = nullptr; // chunks
 
-
-
         void report(T *p, size_type n, bool alloc = true) {
             std::cout << (alloc ? "Alloc: " : "Dealloc: ") << sizeof(T) * n
                       << " bytes at " << std::hex << std::showbase
@@ -92,7 +92,6 @@ namespace task {
                       << " copy is " << this->copies << std::endl;
         }
     };
-
 
 }
 
