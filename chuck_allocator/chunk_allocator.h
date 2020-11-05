@@ -177,6 +177,7 @@ namespace task {
     private:
         static const long MAX_BYTES = 100; //bytes
         SimpleList<Chunk<MAX_BYTES>> *lst; // list of chunks
+        long *self_counter;
 //        static uint copies;
 
     public:
@@ -193,20 +194,30 @@ namespace task {
         };
 
     public:
-        explicit ChunkAllocator() : lst(new SimpleList<Chunk<MAX_BYTES>>()) {
+        ChunkAllocator() : lst(new SimpleList<Chunk<MAX_BYTES>>()), self_counter(new long(1)) {
 #ifdef DEBUG
             self_report("constructor ChunkAllocator()");
+            std::cout << "with list at " << this->lst << std::endl;
 #endif
         };
+
 
         ChunkAllocator(const ChunkAllocator &other) {
 #ifdef DEBUG
             self_report("copy-constructor ChunkAllocator()");
 #endif
-            if (this != &other) {
-//                ChunkAllocator::copies += 1;
+            if (this != &other and this->lst != other.lst) {
+//                if (*this->self_counter == 1) {
+//                    delete this->lst;
+//                    delete this->self_counter;
+//                } else {
+//                    *this->self_counter -= 1;
+//                }
                 this->lst = other.lst;
+                this->self_counter = other.self_counter;
+                *this->self_counter += 1;
             }
+            std::cout << "with self_counter " << *this->self_counter << std::endl;
         }
 
         ChunkAllocator &operator=(ChunkAllocator const &other);
@@ -288,7 +299,12 @@ namespace task {
 #ifdef DEBUG
             self_report("~ChunkAllocator()");
 #endif
-            delete this->lst;
+            if (*this->self_counter == 1) {
+                delete this->lst;
+                delete this->self_counter;
+            } else {
+                *this->self_counter -= 1;
+            }
         }
 
     private:
@@ -311,13 +327,18 @@ namespace task {
 #ifdef DEBUG
         std::cout << "copy-operator ChunkAllocator at " << this << std::endl;
 #endif
-        if (this != &other) {
-//            ChunkAllocator::copies += 1;
-//            if (this->lst != nullptr) {
-//                delete this->lst; // Destruct previous version of begin_of_list
-//            }
+        if (this != &other and this->lst != other.lst) {
+            if (*this->self_counter == 1) {
+                delete this->lst;
+                delete this->self_counter;
+            } else {
+                *this->self_counter -= 1;
+            }
             this->lst = other.lst;
+            this->self_counter = other.self_counter;
+            *this->self_counter += 1;
         }
+        std::cout << "with self_counter " << *this->self_counter << std::endl;
         return *this;
     }
 
