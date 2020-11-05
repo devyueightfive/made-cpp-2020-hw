@@ -1,43 +1,143 @@
-#ifndef HW_5_ALLOCATOR_MAIN_H
-#define HW_5_ALLOCATOR_MAIN_H
+#ifndef HW_5_ALLOCATOR_CHUNK_ALLOCATOR_H
+#define HW_5_ALLOCATOR_CHUNK_ALLOCATOR_H
+
+#define DEBUG  true
 
 #include <cstdlib>
 #include <memory>
 #include <iostream>
 #include <list>
 #include <stdexcept>
-//#include <algorithm>
 
 
 namespace task {
 
+    /**
+     * Responsible for allocating and manage memory.
+     */
     class Chunk {
     private:
         uint8_t *p; // pointer to block with CHUNK_SIZE bytes
-        size_t size_of_data; // size of block part of spent memory
+        size_t size_of_data_memory; // size of block part of spent memory
     public:
         const static size_t CHUNK_SIZE = 100; //bytes
-        Chunk *prev;
 
-        Chunk();
 
-        Chunk(Chunk *prev, size_t size);
+        Chunk() = delete;
 
-        void allocate(size_t size);
+
+        explicit Chunk(size_t size = CHUNK_SIZE) : size_of_data_memory(0) {
+            p = new uint8_t[size];
+#ifdef DEBUG
+            std::cout << "Chunk() at " << std::hex << std::showbase << reinterpret_cast<void *>(p) << std::dec
+                      << std::endl;
+#endif
+        }
 
         Chunk(const Chunk &other);
 
-        bool is_empty();
 
-        size_t get_free_size() const;
+        /// Checks the chunk is allocated.
+        bool is_empty() const {
+#ifdef DEBUG
+            if (p == nullptr) {
+                std::cout << "Chunk is empty." << std::endl;
+            }
+#endif
+            return (p == nullptr);
+        }
 
-        uint8_t *add_block(std::size_t n);
+        /// Returns number of bytes that can be used for data.
+        std::size_t get_size_of_free_memory() const {
+            return Chunk::CHUNK_SIZE - size_of_data_memory;
+        }
 
-        ~Chunk();
+        /// Returns number of bytes that spent for data.
+        std::size_t get_size_of_data_memory() const {
+            return size_of_data_memory;
+        }
+
+        ~Chunk() {
+            if (p != nullptr) {
+                delete[] static_cast<uint8_t *>(p);
+            }
+#ifdef DEBUG
+            std::cout << "~Chunk()" << std::endl;
+#endif
+        }
     };
 
+    /**
+     * Node in a List.
+     */
     template<typename T>
-    class MyAllocator {
+    class Node {
+    public:
+        T *data; //pointer to data.
+        Node *next; // pointer to next Node
+
+        Node() : data(new T()), next(nullptr) {}
+
+    };
+
+
+    /**
+     * Simple list.
+     */
+    template<typename T>
+    class SimpleList {
+    public:
+        Node<T> *begin; // start node of list
+        std::size_t size;
+
+
+        SimpleList() : begin(nullptr), size(0) {}
+
+
+        /**
+         * Adds another node to the tail
+         */
+        T *add() {
+            auto node = new Node<T>(); // create a node
+            if (!begin) {
+                begin = node;
+            } else {
+                auto it = begin;
+                while (it->next != nullptr) {
+                    it = it->next;
+                }
+                it->next = node;
+            }
+            size += 1;
+            return node;
+        }
+
+        bool is_empty() {
+            return (size == 0);
+        }
+
+
+        ~SimpleList() {
+            if (begin != nullptr) {
+                auto it = begin;
+                while (it->next != nullptr) {
+                    auto tmp = it->next;
+                    delete it;
+                    it = tmp;
+                }
+                delete it; // delete tail
+            }
+        }
+    };
+
+
+    /**
+     Custom Allocator with chunks.
+     */
+    template<typename T>
+    class ChunkAllocator {
+    private:
+        SimpleList<Chunk> *lst; // list of chunks
         static uint copies;
 
     public:
@@ -50,21 +150,67 @@ namespace task {
         using size_type = std::size_t;
         template<class U>
         struct rebind {
-            typedef MyAllocator<U> other;
+            typedef ChunkAllocator<U> other;
         };
 
-//    std::list<pointer> elements;
     public:
-        MyAllocator();
+        ChunkAllocator() : lst(new SimpleList<T>()) {
+#ifdef DEBUG
+            self_report();
+            std::cout << "ChunkAllocator()\n";
+#endif
+        };
 
-        // Copy constructor
-        MyAllocator(const MyAllocator &other);
+        ChunkAllocator(const ChunkAllocator &other);
 
-        MyAllocator<T> &operator=(MyAllocator<T> const &other);
+        ChunkAllocator<T> &operator=(ChunkAllocator<T> const &other);
 
-        T *allocate(size_t n);
+        size_t max_size() {
+            return Chunk::CHUNK_SIZE / sizeof(T);
+        }
 
-        size_type max_size();
+        /**
+         * Allocates memory for n element of value_type.
+         * @param n number of elements;
+         * @return pointer to allocated memory.
+         */
+        pointer allocate(size_t n) {
+#ifdef DEBUG
+            self_report();
+            std::cout << "Allocating " << n << " items" << std::endl;
+#endif
+
+            // Request capacity more than Chunk::CHUNK_SIZE
+            if (n > max_size()) {
+                std::cout << "Request amount of memory more than " << Chunk::CHUNK_SIZE << " bytes." << std::endl;
+                throw std::bad_alloc();
+            }
+
+            // If list of begin_of_list is empty add chunk.
+            if (lst->is_empty()) {
+                lst->add();
+            }
+
+            bool found = false;
+
+            // Add n elements. Go through list of begin_of_list to find free place
+            // for requested amount of memory.
+            auto it = lst->begin;
+            auto chunk = it->data;
+            while (true) {
+                if (chunk->get_size_of_free_memory() >= n * sizeof(T)) {
+                    p = reinterpret_cast<T *>(chunk->add_block(n * sizeof(T)));
+                    found = true;
+//                std::cout << "Found free space ..." << std::endl;
+                    break;
+                }
+                if (it->prev == nullptr) {
+                    break;
+                }
+                it = it->prev;
+            }
+        }
+
 
         void deallocate(T *p, size_type n) noexcept;
 
@@ -73,11 +219,9 @@ namespace task {
 
         void destroy(T *p);
 
-        ~MyAllocator();
-
+        ~ChunkAllocator();
 
     private:
-        Chunk *chunks = nullptr; // chunks
 
         void report(T *p, size_type n, bool alloc = true) {
             std::cout << (alloc ? "Alloc: " : "Dealloc: ") << sizeof(T) * n
@@ -93,194 +237,89 @@ namespace task {
     };
 
 
-    Chunk::Chunk() : p(nullptr), size_of_data(0), prev(nullptr) {
-//    std::cout << "Chunk()" << std::endl;
-    };
-
-    Chunk::Chunk(Chunk *prev, size_t size = Chunk::CHUNK_SIZE) : size_of_data(0), prev(prev) {
-        p = new uint8_t[size];
-//    std::cout << "Chunk() at " << std::hex << std::showbase
-//              << reinterpret_cast<void *>(p) << std::dec << std::endl;
-    }
-
-    void Chunk::allocate(size_t size = CHUNK_SIZE) {
-        p = new uint8_t[size];
-//    std::cout << "Chunk() at " << std::hex << std::showbase
-//              << reinterpret_cast<void *>(p) << std::dec << std::endl;
-    }
-
-
-    Chunk::Chunk(const Chunk &other) {
-//    std::cout << "Copy Chunk() at " << std::hex << std::showbase
-//              << reinterpret_cast<void *>(p) << std::dec << std::endl;
-        if (this != &other) {
-            delete[] static_cast<uint8_t *>(p);
-            prev = other.prev;
-            p = other.p;
-            size_of_data = other.size_of_data;
-//            this->copies += 1;
-        }
-    }
-
-    bool Chunk::is_empty() {
-        if (p == nullptr) {
-//        std::cout << "Chunk is empty." << std::endl;
-        }
-        return (p == nullptr);
-    }
-
-    size_t Chunk::get_free_size() const {
-        return Chunk::CHUNK_SIZE - size_of_data;
-    }
-
-    uint8_t *Chunk::add_block(std::size_t n) {
-        if (n > get_free_size()) {
-//        std::cout << "Chunk: requested more bytes than defined in CHUNK_SIZE while your n is (" << n
-//                  << ")" << std::endl;
-            throw std::bad_alloc();
-        }
-        auto return_pointer = p + size_of_data;
-        size_of_data += n;
-//    std::cout << "New block at " << std::hex << std::showbase
-//              << reinterpret_cast<void *>(return_pointer)
-//              << " ends in " << reinterpret_cast<void *>(p + size_of_data) << std::dec
-//              << " with size " << n << " bytes" << std::endl;
-        return return_pointer;
-    }
-
-
-    Chunk::~Chunk() {
-        delete[] static_cast<uint8_t *>(p);
-//    std::cout << "~Chunk()" << std::endl;
-    }
-
-    template<typename T>
-    uint MyAllocator<T>::copies = 1;
-
-    template<typename T>
-    MyAllocator<T>::MyAllocator(): chunks(new Chunk()) {
-//    self_report();
-//    std::cout << "MyAllocator()\n";
-    };
 
 // Copy constructor
-    template<typename T>
-    MyAllocator<T>::MyAllocator(const MyAllocator &other) {
-//    self_report();
-//    std::cout << "copy MyAllocator()\n";
-        if (this != &other) {
-            MyAllocator::copies += 1;
-            delete this->chunks; // Destruct previous version
-            this->chunks = other.chunks;
-        }
-    };
+//    template<typename T>
+//    ChunkAllocator<T>::ChunkAllocator(const ChunkAllocator &other) {
+////    self_report();
+////    std::cout << "copy ChunkAllocator()\n";
+//        if (this != &other) {
+//            ChunkAllocator::copies += 1;
+//            delete this->start; // Destruct previous version
+//            this->start = other.start;
+//        }
+//    };
+
+//    template<typename T>
+//    ChunkAllocator<T> &ChunkAllocator<T>::operator=(const ChunkAllocator<T> &other) {
+////    self_report();
+////    std::cout << "copy ChunkAllocator()\n";
+//        if (this != &other) {
+//            ChunkAllocator::copies += 1;
+//            delete this->start; // Destruct previous version of begin_of_list
+//            this->start = other.start;
+//        }
+//        return *this;
+//    }
+//
+//    template<typename T>
+//    typename ChunkAllocator<T>::
+//
+//    // In case: we didn't find any free place in the list of begin_of_list.
+//    // Create a new chunk.
+//    if (!found) {
+//    auto next_chunk = new Chunk(start);
+//    start = next_chunk;
+//    p = reinterpret_cast<T *>(start->add_block(n * sizeof(T)));
+//}
+//return
+//p;
+//
+//}
+
 
     template<typename T>
-    MyAllocator<T> &MyAllocator<T>::operator=(const MyAllocator<T> &other) {
-//    self_report();
-//    std::cout << "copy MyAllocator()\n";
-        if (this != &other) {
-            MyAllocator::copies += 1;
-            delete this->chunks; // Destruct previous version of chunks
-            this->chunks = other.chunks;
-        }
-        return *this;
-    }
-
-    template<typename T>
-    T *MyAllocator<T>::allocate(size_t n) {
-//    self_report();
-//    std::cout << "Allocating " << n << " items" << std::endl;
-
-        // Request capacity more than Chunk::CHUNK_SIZE
-        if (n > max_size()) {
-            std::cout << "Request amount of memory more than " << Chunk::CHUNK_SIZE << " bytes." << std::endl;
-            throw std::bad_alloc();
-        }
-
-        // If list of chunks is empty add chunk.
-        if (chunks->is_empty()) {
-            chunks->allocate();
-        }
-
-        // Pointer to return. Points to n * sizeof(T) free block.
-        T *p = nullptr;
-        bool found = false;
-
-//        std::cout << "Searching free space ..." << std::endl;
-        // Add n elements. Go through list of chunks to find free place
-        // for requested amount of memory.
-        Chunk *it = chunks;
-        while (true) {
-            if (it->get_free_size() >= n * sizeof(T)) {
-                p = reinterpret_cast<T *>(it->add_block(n * sizeof(T)));
-                found = true;
-//                std::cout << "Found free space ..." << std::endl;
-                break;
-            }
-            if (it->prev == nullptr) {
-                break;
-            }
-            it = it->prev;
-        }
-
-        // In case: we didn't find any free place in the list of chunks.
-        // Create a new chunk.
-        if (!found) {
-            auto next_chunk = new Chunk(chunks);
-            chunks = next_chunk;
-            p = reinterpret_cast<T *>(chunks->add_block(n * sizeof(T)));
-        }
-        return p;
-
-    }
-
-    template<typename T>
-    size_t MyAllocator<T>::max_size() {
-        return Chunk::CHUNK_SIZE / sizeof(T);
-    }
-
-    template<typename T>
-    void MyAllocator<T>::deallocate(T *p, size_type n) noexcept {
+    void ChunkAllocator<T>::deallocate(T *p, size_type n) noexcept {
 //    self_report();
 //    report(p, n, false); // no actual de-allocation
     }
 
     template<typename T>
     template<typename ... Args>
-    void MyAllocator<T>::construct(T *p, Args &&... args) {
+    void ChunkAllocator<T>::construct(T *p, Args &&... args) {
 //    self_report();
         new(p) T(args...); // new - placement function
 //    std::cout << "T()" << std::endl;
     }
 
     template<typename T>
-    void MyAllocator<T>::destroy(T *p) {
+    void ChunkAllocator<T>::destroy(T *p) {
 //    self_report();
         p->~T();
 //    std::cout << "~T()" << std::endl;
     }
 
     template<typename T>
-    MyAllocator<T>::~MyAllocator() {
+    ChunkAllocator<T>::~ChunkAllocator() {
 //    self_report();
-//    std::cout << "~MyAllocator()\n";
-        if (MyAllocator::copies == 1) {
+//    std::cout << "ChunkAllocatortor()\n";
+        if (ChunkAllocator::copies == 1) {
             while (true) {
-                auto prev = chunks->prev;
-                delete chunks;
+                auto prev = start->prev;
+                delete start;
                 if (prev == nullptr) {
                     break;
                 }
-                chunks = prev;
+                start = prev;
             }
 //        std::cout << "~ !!! DESTRUCTED\n";
         } else {
 //        std::cout << "~ no actual destructor\n";
         }
-        MyAllocator::copies -= 1;
+        ChunkAllocator::copies -= 1;
     }
+
 }
 
 
-#endif //HW_5_ALLOCATOR_MAIN_H
+#endif //HW_5_ALLOCATOR_CHUNK_ALLOCATOR_H
