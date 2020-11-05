@@ -19,8 +19,15 @@ public:
         std::cout << "A(" << x << "," << y << ")" << std::endl;
     }
 
-    ~A() { std::cout << "~A" << std::endl; }
+    friend ostream &operator<<(ostream &os, const A &a);
+
+    ~A() { std::cout << "~A(" << x << "," << y << ")" << std::endl; }
 };
+
+ostream &operator<<(ostream &os, const A &a) {
+    os << "A[" << a.x << ", " << a.y << ']';
+    return os;
+}
 
 int main() {
     {
@@ -81,9 +88,16 @@ int main() {
         std::vector<A, decltype(allocator)> vector1(5);
         auto a1 = A(2, 4);
         vector1.push_back(a1);
-        for (int i = 0; i <= 15; ++i) {
-            vector1.push_back(A(7, 7));
+        cout << endl;
+        for (int i = 0; i <= 3; ++i) {
+            A a = A(7, 7);
+            vector1.push_back(a);
         }
+
+        for (auto &el: vector1) {
+            cout << el << " + ";
+        }
+        cout << "\ndestructors" << endl;
     }
 
 
