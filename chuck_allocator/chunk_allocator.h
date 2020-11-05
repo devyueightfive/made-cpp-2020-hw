@@ -8,6 +8,7 @@
 #include <iostream>
 #include <list>
 #include <stdexcept>
+#include <string>
 
 
 namespace task {
@@ -25,14 +26,15 @@ namespace task {
         explicit Chunk() : index(0) {
             p = new uint8_t[N];
 #ifdef DEBUG
-            std::cout << "Chunk constructed at " << this << std::endl;
-            std::cout << "Chunk pointer to " << std::hex << std::showbase << reinterpret_cast<void *>(p) << std::dec
-                      << std::endl;
+            std::cout << "Chunk CONSTRUCTED at " << this << " points to " << std::hex << std::showbase
+                      << reinterpret_cast<void *>(p) << std::dec << std::endl;
 #endif
         }
 
         Chunk(const Chunk &other) {
-            std::cout << "Chunk copy-constructed at " << this << std::endl;
+#ifdef DEBUG
+            std::cout << "Chunk : copy-constructed at " << this << std::endl;
+#endif
             if (this != &other) {
             }
         };
@@ -44,20 +46,25 @@ namespace task {
 
         /// Is allocatable.
         bool can_allocate(size_t bytes) const {
-            return get_size_of_free_memory() >= bytes;
+            return (get_size_of_free_memory() >= bytes);
         }
 
         /// Returns pointer to allocated place.
         uint8_t *allocate(std::size_t n) {
-            if (!can_allocate()) {
+
+            if (!can_allocate(n)) {
 #ifdef DEBUG
                 std::cout << "Chunk: requested more bytes than defined in constructor " << N << " while your n is ("
                           << n << ")" << std::endl;
 #endif
                 throw std::bad_alloc();
             }
-            auto res = p + this->_size_of_data_memory;
-            this->_size_of_data_memory += n;
+            auto res = p + this->index;
+            this->index += n;
+#ifdef DEBUG
+            std::cout << "Chunk at " << this << " allocate" << " : " << std::hex << std::showbase
+                      << reinterpret_cast<void *>(res) << std::dec << std::endl;
+#endif
             return res;
         }
 
@@ -78,6 +85,9 @@ namespace task {
         }
 
         ~Chunk() {
+#ifdef DEBUG
+            std::cout << "~Chunk() at" << this << std::endl;
+#endif
             if (p != nullptr) {
 #ifdef DEBUG
                 std::cout << "~Chunk pointer to " << std::hex << std::showbase << reinterpret_cast<void *>(p)
@@ -85,9 +95,6 @@ namespace task {
 #endif
                 delete[] static_cast<uint8_t *>(p);
             }
-#ifdef DEBUG
-            std::cout << "~Chunk() from " << this << std::endl;
-#endif
         }
     };
 
@@ -115,7 +122,11 @@ namespace task {
         std::size_t size;
 
 
-        SimpleList() : begin(nullptr), size(0) {}
+        SimpleList() : begin(nullptr), size(0) {
+#ifdef DEBUG
+            std::cout << "SimpleList() at" << this << std::endl;
+#endif
+        }
 
 
         /**
@@ -142,6 +153,9 @@ namespace task {
 
 
         ~SimpleList() {
+#ifdef DEBUG
+            std::cout << "~SimpleList() at" << this << std::endl;
+#endif
             if (begin != nullptr) {
                 auto it = begin;
                 while (it->next != nullptr) {
@@ -181,13 +195,21 @@ namespace task {
     public:
         explicit ChunkAllocator() : lst(new SimpleList<Chunk<MAX_BYTES>>()) {
 #ifdef DEBUG
-            self_report("ChunkAllocator()");
+            self_report("constructor ChunkAllocator()");
 #endif
         };
 
-        ChunkAllocator(const ChunkAllocator &other);
+        ChunkAllocator(const ChunkAllocator &other) {
+#ifdef DEBUG
+            self_report("copy-constructor ChunkAllocator()");
+#endif
+            if (this != &other) {
+//                ChunkAllocator::copies += 1;
+                this->lst = other.lst;
+            }
+        }
 
-        ChunkAllocator<value_type> &operator=(ChunkAllocator<value_type> const &other);
+        ChunkAllocator &operator=(ChunkAllocator const &other);
 
         size_t max_size() {
             return MAX_BYTES / sizeof(T);
@@ -200,8 +222,7 @@ namespace task {
          */
         pointer allocate(size_type n) {
 #ifdef DEBUG
-            self_report();
-            std::cout << "Allocating " << n << " items" << std::endl;
+            self_report("Allocating items");
 #endif
             if (n > max_size()) { // Request capacity more than Chunk::CHUNK_SIZE
                 std::cout << "Request amount of memory more than " << MAX_BYTES << " bytes." << std::endl;
@@ -219,7 +240,7 @@ namespace task {
             auto chunk = it->data;
             while (true) {
                 if (n * sizeof(T) < chunk->get_size_of_free_memory()) {
-                    res = reinterpret_cast<T *>(chunk->add_block(n * sizeof(T)));
+                    res = reinterpret_cast<T *>(chunk->allocate(n * sizeof(T)));
                     found = true;
                     break;
                 }
@@ -235,7 +256,7 @@ namespace task {
             if (!found) {
                 auto last_node = lst->add();
                 chunk = last_node->data;
-                res = reinterpret_cast<T *>(chunk->add_block(n * sizeof(T)));
+                res = reinterpret_cast<T *>(chunk->allocate(n * sizeof(T)));
             }
             return res;
         } // allocate()
@@ -243,8 +264,7 @@ namespace task {
 
         void deallocate(pointer p, size_type n) noexcept {
 #ifdef DEBUG
-            self_report();
-            report(p, n, false); // no actual de-allocation
+            self_report("Allocator : deallocate");
 #endif
         }
 
@@ -268,17 +288,7 @@ namespace task {
 #ifdef DEBUG
             self_report("~ChunkAllocator()");
 #endif
-//            if (ChunkAllocator::copies == 1) {
-//
-//#ifdef DEBUG
-//                std::cout << "~ !!! DESTRUCTED\n";
-//#endif
-//            } else {
-//#ifdef DEBUG
-//                std::cout << "~ no actual destructor\n";
-//#endif
-//            }
-//            ChunkAllocator::copies -= 1;
+            delete this->lst;
         }
 
     private:
@@ -291,47 +301,25 @@ namespace task {
 
 
         void self_report(const char *text = "") {
-            std::cout << "i'm : " << std::hex << std::showbase
-                      << reinterpret_cast<void *>(this) << std::dec
-                      //                      << " copy is " << this->copies
-                      << std::endl;
-            std::cout << text << std::endl;
+            std::cout << "i'm at " << this << " : " << text << std::endl;
         }
     };
 
 
-
-// Copy constructor
-//    template<typename T>
-//    ChunkAllocator<T>::ChunkAllocator(const ChunkAllocator &other) {
-////    self_report();
-////    std::cout << "copy ChunkAllocator()\n";
-//        if (this != &other) {
+    template<typename T>
+    ChunkAllocator<T> &ChunkAllocator<T>::operator=(const ChunkAllocator<T> &other) {
+#ifdef DEBUG
+        std::cout << "copy-operator ChunkAllocator at " << this << std::endl;
+#endif
+        if (this != &other) {
 //            ChunkAllocator::copies += 1;
-//            delete this->start; // Destruct previous version
-//            this->start = other.start;
-//        }
-//    };
-
-//    template<typename T>
-//    ChunkAllocator<T> &ChunkAllocator<T>::operator=(const ChunkAllocator<T> &other) {
-////    self_report();
-////    std::cout << "copy ChunkAllocator()\n";
-//        if (this != &other) {
-//            ChunkAllocator::copies += 1;
-//            delete this->start; // Destruct previous version of begin_of_list
-//            this->start = other.start;
-//        }
-//        return *this;
-//    }
-//
-
-
-
-
-
-
-
+//            if (this->lst != nullptr) {
+//                delete this->lst; // Destruct previous version of begin_of_list
+//            }
+            this->lst = other.lst;
+        }
+        return *this;
+    }
 
 } // namespace task
 
