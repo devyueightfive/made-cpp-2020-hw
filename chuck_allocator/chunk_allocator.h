@@ -176,7 +176,7 @@ namespace task {
     class ChunkAllocator {
     private:
         static const long MAX_BYTES = 100; //bytes
-        SimpleList<Chunk<MAX_BYTES>> *lst; // list of chunks
+        SimpleList<Chunk<MAX_BYTES>> *lst = nullptr; // list of chunks
         long *self_counter;
 //        static uint copies;
 
@@ -197,7 +197,6 @@ namespace task {
         ChunkAllocator() : lst(new SimpleList<Chunk<MAX_BYTES>>()), self_counter(new long(1)) {
 #ifdef DEBUG
             self_report("constructor ChunkAllocator()");
-            std::cout << "with list at " << this->lst << std::endl;
 #endif
         };
 
@@ -325,7 +324,7 @@ namespace task {
     template<typename T>
     ChunkAllocator<T> &ChunkAllocator<T>::operator=(const ChunkAllocator<T> &other) {
 #ifdef DEBUG
-        std::cout << "copy-operator ChunkAllocator at " << this << std::endl;
+        std::cout << "i'm at " << this << " : " << this->lst << " : copy-operator " << std::endl;
 #endif
         if (this != &other and this->lst != other.lst) {
             if (*this->self_counter == 1) {
