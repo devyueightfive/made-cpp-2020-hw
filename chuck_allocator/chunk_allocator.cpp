@@ -26,10 +26,16 @@ int main() {
     {
         task::ChunkAllocator<int> a1;
         task::ChunkAllocator<int> a2(a1);
+        task::ChunkAllocator<int> a22(a1);
         task::ChunkAllocator<int> a3 = a1;
         a3 = a2;
+        a1 = a3;
+        a3 = a3;
+        task::ChunkAllocator<int> a33(a3);
         task::ChunkAllocator<int> a4;
         a3 = a4;
+        task::ChunkAllocator<int> a5(a1);
+        a4 = a1;
     }
     cout << "\n" << endl;
     {
@@ -75,8 +81,9 @@ int main() {
         std::vector<A, decltype(allocator)> vector1(5);
         auto a1 = A(2, 4);
         vector1.push_back(a1);
-
-
+        for (int i = 0; i <= 15; ++i) {
+            vector1.push_back(A(7, 7));
+        }
     }
 
 
