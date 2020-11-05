@@ -15,19 +15,15 @@ namespace task {
     /**
      * Responsible for allocating and manage memory.
      */
+    template<size_t N>
     class Chunk {
     private:
         uint8_t *p; // pointer to block with CHUNK_SIZE bytes
-        size_t size_of_data_memory; // size of block part of spent memory
+        size_t _size_of_data_memory;// size of block part of spent memory
     public:
-        const static size_t CHUNK_SIZE = 100; //bytes
 
-
-        Chunk() = delete;
-
-
-        explicit Chunk(size_t size = CHUNK_SIZE) : size_of_data_memory(0) {
-            p = new uint8_t[size];
+        explicit Chunk() : _size_of_data_memory(0) {
+            p = new uint8_t[N];
 #ifdef DEBUG
             std::cout << "Chunk() at " << std::hex << std::showbase << reinterpret_cast<void *>(p) << std::dec
                       << std::endl;
@@ -35,6 +31,20 @@ namespace task {
         }
 
         Chunk(const Chunk &other);
+
+
+        uint8_t *add_block(std::size_t n) {
+            if (n > get_size_of_free_memory()) {
+#ifdef DEBUG
+                std::cout << "Chunk: requested more bytes than defined in constructor " << N << " while your n is ("
+                          << n << ")" << std::endl;
+#endif
+                throw std::bad_alloc();
+            }
+            auto res = p + this->_size_of_data_memory;
+            this->_size_of_data_memory += n;
+            return res;
+        }
 
 
         /// Checks the chunk is allocated.
@@ -49,12 +59,16 @@ namespace task {
 
         /// Returns number of bytes that can be used for data.
         std::size_t get_size_of_free_memory() const {
-            return Chunk::CHUNK_SIZE - size_of_data_memory;
+            return N - this->_size_of_data_memory;
         }
 
         /// Returns number of bytes that spent for data.
         std::size_t get_size_of_data_memory() const {
-            return size_of_data_memory;
+            return this->_size_of_data_memory;
+        }
+
+        std::size_t max_size() const {
+            return N;
         }
 
         ~Chunk() {
@@ -97,7 +111,7 @@ namespace task {
         /**
          * Adds another node to the tail
          */
-        T *add() {
+        Node<T> *add() {
             auto node = new Node<T>(); // create a node
             if (!begin) {
                 begin = node;
@@ -137,8 +151,9 @@ namespace task {
     template<typename T>
     class ChunkAllocator {
     private:
-        SimpleList<Chunk> *lst; // list of chunks
-        static uint copies;
+        static const long MAX_BYTES = 100; //bytes
+        SimpleList<Chunk<MAX_BYTES>> *lst; // list of chunks
+//        static uint copies;
 
     public:
         using value_type = T;
@@ -154,10 +169,9 @@ namespace task {
         };
 
     public:
-        ChunkAllocator() : lst(new SimpleList<T>()) {
+        ChunkAllocator() : lst(new SimpleList<Chunk<MAX_BYTES>>()) {
 #ifdef DEBUG
-            self_report();
-            std::cout << "ChunkAllocator()\n";
+            self_report("ChunkAllocator()");
 #endif
         };
 
@@ -166,7 +180,7 @@ namespace task {
         ChunkAllocator<T> &operator=(ChunkAllocator<T> const &other);
 
         size_t max_size() {
-            return Chunk::CHUNK_SIZE / sizeof(T);
+            return MAX_BYTES / sizeof(T);
         }
 
         /**
@@ -179,47 +193,83 @@ namespace task {
             self_report();
             std::cout << "Allocating " << n << " items" << std::endl;
 #endif
-
-            // Request capacity more than Chunk::CHUNK_SIZE
-            if (n > max_size()) {
-                std::cout << "Request amount of memory more than " << Chunk::CHUNK_SIZE << " bytes." << std::endl;
+            if (n > max_size()) { // Request capacity more than Chunk::CHUNK_SIZE
+                std::cout << "Request amount of memory more than " << MAX_BYTES << " bytes." << std::endl;
                 throw std::bad_alloc();
             }
-
-            // If list of begin_of_list is empty add chunk.
-            if (lst->is_empty()) {
+            if (lst->is_empty()) {// If list of chunks is empty add chunk.
                 lst->add();
             }
-
-            bool found = false;
-
-            // Add n elements. Go through list of begin_of_list to find free place
-            // for requested amount of memory.
+            bool found = false; // indicates free space in existed chunks
+            pointer res; // pointer to result
+            /**
+             * Add n elements. Pass through the list to find free place in existed chunks.
+            */
             auto it = lst->begin;
             auto chunk = it->data;
             while (true) {
-                if (chunk->get_size_of_free_memory() >= n * sizeof(T)) {
-                    p = reinterpret_cast<T *>(chunk->add_block(n * sizeof(T)));
+                if (n * sizeof(T) < chunk->get_size_of_free_memory()) {
+                    res = reinterpret_cast<T *>(chunk->add_block(n * sizeof(T)));
                     found = true;
-//                std::cout << "Found free space ..." << std::endl;
                     break;
                 }
-                if (it->prev == nullptr) {
+                if (it->next == nullptr) {
                     break;
                 }
-                it = it->prev;
+                it = it->next;
+                chunk = it->data;
             }
+            /**
+             * In case: we didn't find any free place in existed chunks. Create a new chunk.
+             */
+            if (!found) {
+                auto last_node = lst->add();
+                chunk = last_node->data;
+                res = reinterpret_cast<T *>(chunk->add_block(n * sizeof(T)));
+            }
+            return res;
+        } // allocate()
+
+
+        void deallocate(T *p, size_type n) noexcept {
+#ifdef DEBUG
+            self_report();
+            report(p, n, false); // no actual de-allocation
+#endif
         }
 
 
-        void deallocate(T *p, size_type n) noexcept;
-
         template<typename ... Args>
-        void construct(T *p, Args &&... args);
+        void construct(T *p, Args &&... args) {
+#ifdef DEBUG
+            self_report("construct ChunkAllocator");
+#endif
+            new(p) T(args...); // new - placement function
+        }
 
-        void destroy(T *p);
+        void destroy(T *p) {
+#ifdef DEBUG
+            self_report("destroy ChunkAllocator");
+#endif
+            p->~T();
+        }
 
-        ~ChunkAllocator();
+        ~ChunkAllocator() {
+#ifdef DEBUG
+            self_report("~ChunkAllocator()");
+#endif
+//            if (ChunkAllocator::copies == 1) {
+//
+//#ifdef DEBUG
+//                std::cout << "~ !!! DESTRUCTED\n";
+//#endif
+//            } else {
+//#ifdef DEBUG
+//                std::cout << "~ no actual destructor\n";
+//#endif
+//            }
+//            ChunkAllocator::copies -= 1;
+        }
 
     private:
 
@@ -229,10 +279,13 @@ namespace task {
                       << reinterpret_cast<void *>(p) << std::dec << std::endl;
         }
 
-        void self_report() {
+
+        void self_report(const char *text = "") {
             std::cout << "i'm : " << std::hex << std::showbase
                       << reinterpret_cast<void *>(this) << std::dec
-                      << " copy is " << this->copies << std::endl;
+                      //                      << " copy is " << this->copies
+                      << std::endl;
+            std::cout << text << std::endl;
         }
     };
 
@@ -262,64 +315,15 @@ namespace task {
 //        return *this;
 //    }
 //
-//    template<typename T>
-//    typename ChunkAllocator<T>::
-//
-//    // In case: we didn't find any free place in the list of begin_of_list.
-//    // Create a new chunk.
-//    if (!found) {
-//    auto next_chunk = new Chunk(start);
-//    start = next_chunk;
-//    p = reinterpret_cast<T *>(start->add_block(n * sizeof(T)));
-//}
-//return
-//p;
-//
-//}
 
 
-    template<typename T>
-    void ChunkAllocator<T>::deallocate(T *p, size_type n) noexcept {
-//    self_report();
-//    report(p, n, false); // no actual de-allocation
-    }
 
-    template<typename T>
-    template<typename ... Args>
-    void ChunkAllocator<T>::construct(T *p, Args &&... args) {
-//    self_report();
-        new(p) T(args...); // new - placement function
-//    std::cout << "T()" << std::endl;
-    }
 
-    template<typename T>
-    void ChunkAllocator<T>::destroy(T *p) {
-//    self_report();
-        p->~T();
-//    std::cout << "~T()" << std::endl;
-    }
 
-    template<typename T>
-    ChunkAllocator<T>::~ChunkAllocator() {
-//    self_report();
-//    std::cout << "ChunkAllocatortor()\n";
-        if (ChunkAllocator::copies == 1) {
-            while (true) {
-                auto prev = start->prev;
-                delete start;
-                if (prev == nullptr) {
-                    break;
-                }
-                start = prev;
-            }
-//        std::cout << "~ !!! DESTRUCTED\n";
-        } else {
-//        std::cout << "~ no actual destructor\n";
-        }
-        ChunkAllocator::copies -= 1;
-    }
 
-}
+
+
+} // namespace task
 
 
 #endif //HW_5_ALLOCATOR_CHUNK_ALLOCATOR_H
