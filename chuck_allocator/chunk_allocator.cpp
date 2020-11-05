@@ -31,6 +31,19 @@ ostream &operator<<(ostream &os, const A &a) {
 
 int main() {
     {
+        cout << "copy of uninit allocator" << endl;
+        task::ChunkAllocator<int> a;
+        task::ChunkAllocator<int> b(a);
+        size_t n1 = 10;
+        int *p1 = a.allocate(n1);
+        int *p2 = b.allocate(n1);
+        cout << "deallocations" << endl;
+        a.deallocate(p1, n1);
+        b.deallocate(p2, n1);
+    }
+    cout << "\n" << endl;
+    {
+        cout << "copy-constructor/copy-operator" << endl;
         task::ChunkAllocator<int> a1;
         task::ChunkAllocator<int> a2(a1);
         task::ChunkAllocator<int> a22(a1);
@@ -44,6 +57,8 @@ int main() {
         task::ChunkAllocator<int> a5(a1);
         a4 = a1;
     }
+
+
     cout << "\n" << endl;
     {
         cout << "T = int" << endl;
