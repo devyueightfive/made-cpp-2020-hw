@@ -178,7 +178,6 @@ namespace task {
         static const long MAX_BYTES = 100; //bytes
         SimpleList<Chunk<MAX_BYTES>> *lst = nullptr; // list of chunks
         long *self_counter;
-//        static uint copies;
 
     public:
         using value_type = T;
@@ -206,12 +205,6 @@ namespace task {
             self_report("copy-constructor ChunkAllocator()");
 #endif
             if (this != &other and this->lst != other.lst) {
-//                if (*this->self_counter == 1) {
-//                    delete this->lst;
-//                    delete this->self_counter;
-//                } else {
-//                    *this->self_counter -= 1;
-//                }
                 this->lst = other.lst;
                 this->self_counter = other.self_counter;
                 *this->self_counter += 1;
@@ -318,7 +311,7 @@ namespace task {
         void self_report(const char *text = "") {
             std::cout << "i'm at " << this << " : " << this->lst << " : " << text << std::endl;
         }
-    };
+    }; // ChunkAllocator<>
 
 
     template<typename T>
