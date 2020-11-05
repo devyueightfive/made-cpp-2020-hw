@@ -19,22 +19,37 @@ namespace task {
     class Chunk {
     private:
         uint8_t *p; // pointer to block with CHUNK_SIZE bytes
-        size_t _size_of_data_memory;// size of block part of spent memory
+        size_t index;// size of block part of spent memory
     public:
 
-        explicit Chunk() : _size_of_data_memory(0) {
+        explicit Chunk() : index(0) {
             p = new uint8_t[N];
 #ifdef DEBUG
-            std::cout << "Chunk() at " << std::hex << std::showbase << reinterpret_cast<void *>(p) << std::dec
+            std::cout << "Chunk constructed at " << this << std::endl;
+            std::cout << "Chunk pointer to " << std::hex << std::showbase << reinterpret_cast<void *>(p) << std::dec
                       << std::endl;
 #endif
         }
 
-        Chunk(const Chunk &other);
+        Chunk(const Chunk &other) {
+            std::cout << "Chunk copy-constructed at " << this << std::endl;
+            if (this != &other) {
+            }
+        };
 
+        /// Returns number of bytes that can be used for data.
+        std::size_t get_size_of_free_memory() const {
+            return N - this->index;
+        }
 
-        uint8_t *add_block(std::size_t n) {
-            if (n > get_size_of_free_memory()) {
+        /// Is allocatable.
+        bool can_allocate(size_t bytes) const {
+            return get_size_of_free_memory() >= bytes;
+        }
+
+        /// Returns pointer to allocated place.
+        uint8_t *allocate(std::size_t n) {
+            if (!can_allocate()) {
 #ifdef DEBUG
                 std::cout << "Chunk: requested more bytes than defined in constructor " << N << " while your n is ("
                           << n << ")" << std::endl;
@@ -57,15 +72,6 @@ namespace task {
             return (p == nullptr);
         }
 
-        /// Returns number of bytes that can be used for data.
-        std::size_t get_size_of_free_memory() const {
-            return N - this->_size_of_data_memory;
-        }
-
-        /// Returns number of bytes that spent for data.
-        std::size_t get_size_of_data_memory() const {
-            return this->_size_of_data_memory;
-        }
 
         std::size_t max_size() const {
             return N;
@@ -73,10 +79,14 @@ namespace task {
 
         ~Chunk() {
             if (p != nullptr) {
+#ifdef DEBUG
+                std::cout << "~Chunk pointer to " << std::hex << std::showbase << reinterpret_cast<void *>(p)
+                          << std::dec << std::endl;
+#endif
                 delete[] static_cast<uint8_t *>(p);
             }
 #ifdef DEBUG
-            std::cout << "~Chunk()" << std::endl;
+            std::cout << "~Chunk() from " << this << std::endl;
 #endif
         }
     };
@@ -169,7 +179,7 @@ namespace task {
         };
 
     public:
-        ChunkAllocator() : lst(new SimpleList<Chunk<MAX_BYTES>>()) {
+        explicit ChunkAllocator() : lst(new SimpleList<Chunk<MAX_BYTES>>()) {
 #ifdef DEBUG
             self_report("ChunkAllocator()");
 #endif
@@ -177,7 +187,7 @@ namespace task {
 
         ChunkAllocator(const ChunkAllocator &other);
 
-        ChunkAllocator<T> &operator=(ChunkAllocator<T> const &other);
+        ChunkAllocator<value_type> &operator=(ChunkAllocator<value_type> const &other);
 
         size_t max_size() {
             return MAX_BYTES / sizeof(T);
@@ -188,7 +198,7 @@ namespace task {
          * @param n number of elements;
          * @return pointer to allocated memory.
          */
-        pointer allocate(size_t n) {
+        pointer allocate(size_type n) {
 #ifdef DEBUG
             self_report();
             std::cout << "Allocating " << n << " items" << std::endl;
@@ -231,7 +241,7 @@ namespace task {
         } // allocate()
 
 
-        void deallocate(T *p, size_type n) noexcept {
+        void deallocate(pointer p, size_type n) noexcept {
 #ifdef DEBUG
             self_report();
             report(p, n, false); // no actual de-allocation
@@ -240,14 +250,14 @@ namespace task {
 
 
         template<typename ... Args>
-        void construct(T *p, Args &&... args) {
+        void construct(pointer p, Args &&... args) {
 #ifdef DEBUG
             self_report("construct ChunkAllocator");
 #endif
             new(p) T(args...); // new - placement function
         }
 
-        void destroy(T *p) {
+        void destroy(pointer p) {
 #ifdef DEBUG
             self_report("destroy ChunkAllocator");
 #endif
@@ -273,7 +283,7 @@ namespace task {
 
     private:
 
-        void report(T *p, size_type n, bool alloc = true) {
+        void report(pointer p, size_type n, bool alloc = true) {
             std::cout << (alloc ? "Alloc: " : "Dealloc: ") << sizeof(T) * n
                       << " bytes at " << std::hex << std::showbase
                       << reinterpret_cast<void *>(p) << std::dec << std::endl;
