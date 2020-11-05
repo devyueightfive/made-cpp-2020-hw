@@ -317,7 +317,7 @@ namespace task {
 
 
         void self_report(const char *text = "") {
-            std::cout << "i'm at " << this << " : " << text << std::endl;
+            std::cout << "i'm at " << this << " : " << this->lst << " : " << text << std::endl;
         }
     };
 
