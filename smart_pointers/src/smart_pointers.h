@@ -4,6 +4,19 @@
 
 namespace task {
 
+    struct ControlBlock {
+        long shared_ptr_counter = 0;
+        long weak_ptr_counter = 0;
+
+        ControlBlock() = default;
+    };
+
+    template<class T>
+    class WeakPtr;
+
+    template<class T>
+    class SharedPtr;
+
     /**
      * Class unique_ptr is a smart pointer that owns and manages another object through a pointer
      * and disposes of that object when the unique_ptr goes out of scope.
@@ -98,9 +111,10 @@ namespace task {
         using pointer = T *;
         using element_type = T;
         using weak_type = WeakPtr<T>;
+        friend WeakPtr<T>;
     private:
         pointer current_ptr = nullptr;
-        long *control_block = nullptr;
+        ControlBlock *control_block = nullptr;
     public:
 
         // constructors
@@ -124,12 +138,12 @@ namespace task {
          *  Move-constructs a shared_ptr from r. After the construction,
          *  *this contains a copy of the previous state of r, r is empty and its stored pointer is null.
          */
-        SharedPtr(const SharedPtr &&r) noexcept;
+        SharedPtr(SharedPtr &&r) noexcept;
 
         /**
-         *  Constructs a shared_ptr which shares ownership of the object managed by r.
+         *  Constructs a shared_ptr from WeakPtr.
          */
-        explicit SharedPtr(const weak_type &r) noexcept;
+        SharedPtr(const WeakPtr<T> &w) noexcept;
 
 
         /**
@@ -158,6 +172,12 @@ namespace task {
          * @ptr	-	pointer to an object to acquire ownership of.
          */
         void reset(pointer ptr);
+
+        /**
+         * Releases the ownership of the managed object, if any.
+         * After the call, *this manages no object. Equivalent to shared_ptr().swap(*this);
+         */
+        void reset() noexcept;
 
         /**
          * Exchanges the contents of *this and r.
@@ -189,6 +209,8 @@ namespace task {
          */
         long use_count() const noexcept;
 
+//        friend WeakPtr<T>::WeakPtr(const SharedPtr &s) noexcept;
+
     };
 
 
@@ -203,45 +225,92 @@ namespace task {
     public:
         using pointer = T *;
         using element_type = T;
+
+        friend SharedPtr<T>;
     private:
         pointer current_ptr = nullptr;
+        ControlBlock *control_block = nullptr;
     public:
         // constructors
 
+        /**
+         * Empty pointer.
+         */
         WeakPtr() noexcept;
 
-        explicit WeakPtr(const SharedPtr<T> &s) noexcept;
+        /**
+         * Constructs new weak_ptr which shares an object managed by r.
+         * If r manages no object, *this manages no object too.
+         */
+        WeakPtr(const SharedPtr<T> &s) noexcept;
 
-        WeakPtr(const WeakPtr<T> &r) noexcept;
+        /**
+         * Constructs new weak_ptr which shares an object managed by r.
+         * If r manages no object, *this manages no object too.
+         */
+        WeakPtr(const WeakPtr &r) noexcept;
 
-        WeakPtr(const WeakPtr<T> &&r) noexcept;
+        /**
+         * Move constructors. Moves a weak_ptr instance from r into *this.
+         * After this, r is empty and r.use_count()==0
+         */
+        WeakPtr(WeakPtr &&w) noexcept;
 
+        /**
+         * Destroys a weak_ptr
+         */
         ~WeakPtr();
 
-        WeakPtr &operator=(WeakPtr &r);
+        /**
+         * Replaces the managed object with the one managed by r.
+         * The object is shared with r. If r manages no object, *this manages no object too.
+         */
+        WeakPtr &operator=(const WeakPtr &r) noexcept;
 
-        WeakPtr &operator=(WeakPtr &&r);
+        WeakPtr &operator=(const SharedPtr<T> &r) noexcept;
+
+        /**
+         * Move operator=.
+         */
+        WeakPtr &operator=(WeakPtr &&r) noexcept;
 
         //observers
 
-        long use_count();
+        /**
+         * Returns the number of shared_ptr instances that share ownership of the managed object,
+         * or ​0​ if the managed object has already been deleted, i.e. *this is empty.
+         */
+        long use_count() const noexcept;
 
+        /**
+         * Equivalent to use_count() == 0. The destructor for the managed object may not yet have been called,
+         * but this object's destruction is imminent (or may have already happened).
+         */
         bool expired() const noexcept;
 
+        /**
+         * Creates a new std::shared_ptr that shares ownership of the managed object.
+         * If there is no managed object, i.e. *this is empty, then the returned shared_ptr also is empty.
+         */
         SharedPtr<T> lock() const noexcept;
 
         // modifiers
 
+        /**
+         * Releases the reference to the managed object. After the call *this manages no object.
+         */
         void reset() noexcept;
 
-        void swap();
+        /**
+         * Exchanges the contents of *this and r.
+         */
+        void swap(WeakPtr &r) noexcept;
+
+
+//        friend SharedPtr<T>::SharedPtr(const WeakPtr<T> &w) noexcept;
 
     };
 
-    template<class T>
-    WeakPtr<T>::WeakPtr(SharedPtr &s) {
-
-    }
 
 }  // namespace task
 
